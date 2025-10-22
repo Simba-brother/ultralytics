@@ -1,0 +1,11 @@
+Best fitness: 0.42271, 
+Loss names: ('box_loss', 'cls_loss', 'dfl_loss'), 
+Metrics: {
+    'metrics/precision(B)': 0.94796, 
+    'metrics/recall(B)': 0.07368, 
+    'metrics/mAP50(B)': 0.55745, 
+    'metrics/mAP50-95(B)': 0.42271, 
+    'val/box_loss': 0.92572, 
+    'val/cls_loss': 2.85742, 
+    'val/dfl_loss': 1.3327}, 
+    Total loss: tensor([0.9380, 1.5730, 1.2573], device='cuda:0')
