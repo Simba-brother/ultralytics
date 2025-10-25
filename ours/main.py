@@ -10,7 +10,7 @@ from ultralytics.data.utils import check_det_dataset
 
 class PerSampleLossTracker:
     """追踪每个训练样本的loss"""
-    
+
     def __init__(self, model, save_dir='sample_losses'):
         self.model = model
         self.save_dir = Path(save_dir)
@@ -114,7 +114,6 @@ class PerSampleLossTracker:
         pivot_data.to_csv(pivot_path)
         print(f"每个样本的epoch变化已保存到: {pivot_path}")
 
-
 def train_with_sample_loss_tracking(model_path='yolov8n.pt', 
                                    data_yaml='coco128.yaml',
                                    epochs=10,
@@ -148,7 +147,6 @@ def train_with_sample_loss_tracking(model_path='yolov8n.pt',
     loss_tracker.save_summary()
     
     return model, loss_tracker
-
 
 # 使用示例
 if __name__ == "__main__":
