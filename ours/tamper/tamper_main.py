@@ -40,7 +40,6 @@ def tamper_box(dataset_label_dir:str):
         print(f"{id+1}:{selected_file_path}")
         inject_box_error(selected_file_path)
 
-
 if __name__ == "__main__":
     dataset_label_dir = "datasets/african-wildlife/labels/train"
     tamper_class(dataset_label_dir)
