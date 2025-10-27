@@ -1,5 +1,6 @@
 import re
 import random
+import pandas as pd
 from common.utils import traverse_directory
 from ours.tamper.inject_error import inject_class_error, inject_box_error
 
@@ -7,6 +8,8 @@ def tamper_class(dataset_label_dir:str):
     print(f"准备注错的训练集目录为:{dataset_label_dir}")
     target_class = 0
     print(f"准备注错的目标设置类为:{target_class}")
+    new_class = 1
+    print(f"指定的新类别为:{new_class}")
     file_path_list = traverse_directory(dataset_label_dir)
     target_class_file_path_list = []
     pattern = "^{0}".format(target_class+1)
@@ -22,10 +25,23 @@ def tamper_class(dataset_label_dir:str):
     falsify_num = int(len(target_class_file_path_list) * falsify_ratio)
     print(f"篡改比例为:{falsify_ratio},篡改的图像数量为:{falsify_num}")
     selected_file_path_list = random.sample(target_class_file_path_list, falsify_num)
+    
+    print(f"篡改的图像文件为:")
     print(f"篡改的图像文件为:")
     for id, selected_file_path in enumerate(selected_file_path_list):
         print(f"{id+1}:{selected_file_path}")
-        inject_class_error(selected_file_path,new_class=1)
+        inject_class_error(selected_file_path,new_class)
+    # 记录篡改的文件到csv中
+    record_data = []
+    for id, selected_file_path in enumerate(selected_file_path_list):
+        img_path = selected_file_path.replace("labels","images")
+        img_path = img_path.replace("txt","jpg")
+        item = {"img_path":img_path, "label_file_path":selected_file_path,"origin_class_label":target_class, "falsify_class_label":new_class}
+        record_data.append(item)
+    record_data_df = pd.DataFrame(record_data)
+    save_file_path = "exp_results/datas/class_label_falsify_record.csv"
+    record_data_df.to_csv(save_file_path, index=False)
+    print(f"篡改记录保存在:{save_file_path}")
 
 def tamper_box(dataset_label_dir:str):
     print(f"准备注错的训练集目录为:{dataset_label_dir}")

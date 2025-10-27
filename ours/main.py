@@ -4,6 +4,9 @@ from torch.utils.data import DataLoader
 import pandas as pd
 from pathlib import Path
 import numpy as np
+# 绘制 Precision-Recall 曲线
+import matplotlib.pyplot as plt
+from scipy.stats import linregress
 # 加载训练数据集
 from ultralytics.data import build_dataloader
 from ultralytics.data.utils import check_det_dataset
@@ -11,7 +14,7 @@ from ultralytics.data.utils import check_det_dataset
 class PerSampleLossTracker:
     """追踪每个训练样本的loss"""
 
-    def __init__(self, model, save_dir='sample_losses'):
+    def __init__(self, model, save_dir='exp_results/datas/sample_losses'):
         self.model = model
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
@@ -108,7 +111,7 @@ class PerSampleLossTracker:
         pivot_data = all_data.pivot_table(
             index='sample_idx', # 行索引
             columns='epoch', # 列索引
-            values='total_loss' # 值
+            values='cls_loss' # 值
         )
         pivot_path = self.save_dir / 'sample_loss_by_epoch.csv'
         pivot_data.to_csv(pivot_path)
@@ -148,16 +151,152 @@ def train_with_sample_loss_tracking(model_path='yolov8n.pt',
     
     return model, loss_tracker
 
+
+
+def rank_samples_by_loss_decline(csv_file_path):
+    """
+    基于损失下降梯度对样本进行排序
+    
+    参数:
+    - csv_file_path: 包含损失数据的CSV文件路径
+    """
+    
+    # 读取数据
+    df = pd.read_csv(csv_file_path)
+    
+    # 提取损失数据（假设第1列是sample_id，其余列是epoch损失）
+    sample_ids = df.iloc[:, 0]
+    loss_data = df.iloc[:, 1:].values
+    
+    # 计算每个样本的损失下降梯度
+    slopes = []
+    
+    for i, losses in enumerate(loss_data):
+        # 计算损失下降趋势（线性回归斜率）
+        epochs = np.arange(len(losses))
+        slope, _, _, _, _ = linregress(epochs, losses)
+        slopes.append(slope)
+    
+    # 创建结果DataFrame
+    result_df = pd.DataFrame({
+        'sample_idx': sample_ids,
+        'loss_decline_slope': slopes
+    })
+    
+    # 按损失下降梯度排序（斜率越小，下降越快）
+    # 注意：斜率负值越大表示下降越快，正值表示损失上升
+    result_df = result_df.sort_values('loss_decline_slope', ascending=False)
+    
+    # 重置索引并添加排名
+    result_df = result_df.reset_index(drop=True)
+    result_df['rank'] = result_df.index + 1
+    
+    print("基于损失下降梯度的样本排序（前20个最可疑的样本）:")
+    print("排名越高（rank越小）的样本损失下降越慢，越可能是错误标注")
+    print(result_df.head(5))
+    epoch_0_df = pd.read_csv("exp_results/datas/sample_losses/epoch_0_sample_losses.csv")
+    # 基于 sample_id 合并两个 DataFrame，只添加 image_path 列到 df2
+    rank_df = pd.merge(
+        result_df, 
+        epoch_0_df[['sample_idx', 'image_path']], 
+        on='sample_idx', 
+        how='left'
+    )
+    rank_df.to_csv("exp_results/datas/rank.csv",index=False)
+    print("rank csv保存在:exp_results/datas/rank.csv")
+    return rank_df
+
+
+def calculate_pr_metrics(list_A, list_B, thresholds=None):
+    """
+    计算在不同截断阈值下的 Precision 和 Recall
+    
+    参数:
+    - list_A: 按出错概率排序的样本ID列表（越靠前越可能是错误样本）
+    - list_B: 真实的错误样本ID列表
+    - thresholds: 阈值列表，可以是百分比或绝对数量
+    
+    返回:
+    - 包含不同阈值下 Precision 和 Recall 的 DataFrame
+    """
+    
+    # 如果没有提供阈值，使用默认的百分比阈值
+    if thresholds is None:
+        thresholds = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5]
+    
+    results = []
+    total_error_samples = len(list_B)
+    
+    for threshold in thresholds:
+        # 根据阈值类型确定截取数量
+        if threshold < 1:  # 百分比阈值
+            n = int(len(list_A) * threshold)
+            threshold_type = f"{threshold*100}%"
+        else:  # 绝对数量阈值
+            n = min(int(threshold), len(list_A))
+            threshold_type = f"{n}个"
+        
+        # 获取预测的错误样本
+        predicted_errors = set(list_A[:n])
+        
+        # 计算 TP, FP, FN
+        true_positives = len(predicted_errors.intersection(list_B))
+        false_positives = n - true_positives
+        false_negatives = total_error_samples - true_positives
+        
+        # 计算 Precision 和 Recall
+        precision = true_positives / n if n > 0 else 0
+        recall = true_positives / total_error_samples if total_error_samples > 0 else 0
+        
+        # 计算 F1-score
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        
+        results.append({
+            'threshold': threshold_type,
+            'n_samples': n,
+            'true_positives': true_positives,
+            'false_positives': false_positives,
+            'false_negatives': false_negatives,
+            'precision': round(precision, 4),
+            'recall': round(recall, 4),
+            'f1_score': round(f1, 4)
+        })
+    
+    return pd.DataFrame(results)
+
+def analyse():
+    rank_df = pd.read_csv("exp_results/datas/rank.csv")
+    falsify_record_df = pd.read_csv("exp_results/datas/class_label_falsify_record.csv")
+    ranked_image_list = rank_df["image_path"]
+    falsify_image_list = falsify_record_df["img_path"]
+    results_df = calculate_pr_metrics(ranked_image_list,falsify_image_list)
+    plt.figure(figsize=(10, 6))
+    plt.plot(results_df['threshold'], results_df['precision'], 'b-', linewidth=2, label='Precision')
+    plt.plot(results_df['threshold'], results_df['recall'], 'r-', linewidth=2, label='Recall')
+    plt.xlabel('cut off')
+    plt.ylabel('score')
+    plt.title('Precision and Recall over cut off')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("exp_results/datas/PR.png")
+
+
 # 使用示例
 if __name__ == "__main__":
     # 方式1: 使用自动追踪功能训练
-    model, tracker = train_with_sample_loss_tracking(
-        model_path='yolo11n.pt',
-        data_yaml='african-wildlife.yaml',
-        epochs=3,
-        imgsz=640,
-        batch=16
-    )
+    # model, tracker = train_with_sample_loss_tracking(
+    #     model_path='yolo11n.pt',
+    #     data_yaml='african-wildlife.yaml',
+    #     epochs=10,
+    #     imgsz=640,
+    #     batch=32,
+    #     device=0
+    # )
+
+    # 分析样本在训练过程中指标趋势
+    # rank_samples_by_loss_decline("exp_results/datas/sample_losses/sample_loss_by_epoch.csv")
+    analyse()
     # 方式2: 对已训练的模型，单独计算某个epoch的样本loss
     """
     model = YOLO('runs/detect/train/weights/best.pt')

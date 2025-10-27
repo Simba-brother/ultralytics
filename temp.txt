@@ -9,3 +9,6 @@ Metrics: {
     'val/cls_loss': 2.85742, 
     'val/dfl_loss': 1.3327}, 
     Total loss: tensor([0.9380, 1.5730, 1.2573], device='cuda:0')
+
+
+
