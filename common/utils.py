@@ -1,8 +1,8 @@
 import os
-def traverse_directory(path):
+def traverse_directory(root_dir):
     '''变异目录下所有文件'''
     file_path_list = []
-    for root, dirs, files in os.walk(path):
+    for root, dirs, files in os.walk(root_dir):
         for file in files:
             file_path = os.path.join(root, file)
             file_path_list.append(file_path)

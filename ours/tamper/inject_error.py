@@ -1,19 +1,30 @@
 import random
 
-def inject_class_error(label_file_path, new_class:int):
-    '''将标签文件中的class -> new_class'''
+def inject_class_error(label_file_path, class_idx_list):
+    '''将标签文件中的class -> other class'''
     # 先读
     with open(label_file_path, 'r') as file:
         lines = file.readlines()
+    o_class_idx_list = []
+    n_class_idx_list = []
     # 修改
     for i in range(len(lines)):
         line = lines[i]
         parts = line.split()
-        parts[0] = f'{new_class}'
+        original_class_idx = parts[0]
+        o_class_idx_list.append(original_class_idx)
+        # 去掉 cls_idx
+        candidates = [x for x in class_idx_list if x != original_class_idx]
+        # 随机选择一个
+        new_cls_idx = random.choice(candidates)
+        n_class_idx_list.append(new_cls_idx)
+        parts[0] = f'{new_cls_idx}'
         lines[i] = " ".join(parts)
     # 写回
     with open(label_file_path, 'w') as file:
         file.writelines(lines)
+    return o_class_idx_list,n_class_idx_list
+    
 
 def inject_box_error(label_file_path):
     '''将标签文件中的bbox进行扰动篡改'''
