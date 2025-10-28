@@ -25,7 +25,7 @@ class PerSampleLossTracker:
         print(f"\n计算 Epoch {epoch} 的样本loss...")
         
         # 设置模型为评估模式
-        self.model.model.eval()
+        self.model.eval()
 
         # 检查数据集配置
         data_dict = check_det_dataset(data_yaml)
@@ -34,7 +34,7 @@ class PerSampleLossTracker:
         # 根据yaml把训练集给构建出来
         dataset = self.model.trainer.build_dataset(
             data_dict["train"], # self.model.trainer.args.data, # data_dict, 
-            mode='train',
+            mode='val',
             batch=1
         )
         # 基于数据集，构建出数据加载器，因为需要样本级别的loss，所以数据加载器的batch=1,为了好追溯shuffle=False
@@ -49,29 +49,34 @@ class PerSampleLossTracker:
         
         with torch.no_grad():
             for batch_idx, batch in enumerate(dataloader):
-                # 将数据移到正确的设备
                 batch = self.model.trainer.preprocess_batch(batch)
-                
-                # 前向传播
-                preds = self.model.model(batch['img'])
-                
-                # 计算loss
-                loss, loss_items = self.model.model.criterion(preds, batch)
-                box_loss = loss_items[0].item()
+                results = self.model(batch["img"])
+                result = results[0]
+                loss,loss_items = self.model.loss(batch)
+                # 获得样本的loss data
+                box_loss = loss_items[0].item() # 度量预测框与真实框的重叠程度 box_loss = 1 - IOU(Box_pred, Box_gt)
                 cls_loss = loss_items[1].item()
-                dfl_loss = loss_items[2].item()
-                total_loss = 7.5*box_loss+0.5*cls_loss+1.5*dfl_loss
+                dfl_loss = loss_items[2].item() # 框子微调
+                total_loss = box_loss + cls_loss + dfl_loss
+                # 获得样本的confidence
+                conf_sum = result.boxes.conf.sum().item()
+                # 获得 predicted box count 与 ground truth box count 的差值
+                gt_box_count = result.boxes.cls.numel()
+                predicted_box_count = result.boxes.conf.numel()
+                box_count_dif = abs(gt_box_count-predicted_box_count)
+
                 # 记录该样本的loss
                 sample_info = {
                     'epoch': epoch,
                     'sample_idx': batch_idx,
                     'image_path': str(batch['im_file'][0]) if 'im_file' in batch else f"sample_{batch_idx}",
                     'total_loss': total_loss,
-                    'box_loss': box_loss,
-                    'cls_loss': cls_loss,
-                    'dfl_loss': dfl_loss
+                    'box_loss': box_loss, # box损失,IOU相关
+                    'cls_loss': cls_loss, # 类损失
+                    'dfl_loss': dfl_loss,  # dfl 框子回归损失,框子微调相关
+                    "conf_sum":conf_sum, # 置信度
+                    "box_count_dif":box_count_dif # box 个数
                 }
-                
                 sample_losses.append(sample_info)
                 
                 if (batch_idx + 1) % 100 == 0: # 每完成100个batch(sample)就会打印一下
@@ -92,7 +97,7 @@ class PerSampleLossTracker:
         print(f"最大Total loss样本索引: {df['total_loss'].idxmax()}, loss: {df['total_loss'].max():.4f}")
         print(f"最小Total loss样本索引: {df['total_loss'].idxmin()}, loss: {df['total_loss'].min():.4f}")
         
-        self.epoch_losses.append(df)
+        self.epoch_losses.append(df) # 每个epoch组织成一个df
         
         return df
     
@@ -285,18 +290,18 @@ def analyse():
 # 使用示例
 if __name__ == "__main__":
     # 方式1: 使用自动追踪功能训练
-    # model, tracker = train_with_sample_loss_tracking(
-    #     model_path='yolo11n.pt',
-    #     data_yaml='african-wildlife.yaml',
-    #     epochs=10,
-    #     imgsz=640,
-    #     batch=32,
-    #     device=0
-    # )
+    model, tracker = train_with_sample_loss_tracking(
+        model_path='yolo11n.pt',
+        data_yaml='african-wildlife.yaml',
+        epochs=20,
+        imgsz=640,
+        batch=32,
+        device=0
+    )
 
     # 分析样本在训练过程中指标趋势
     # rank_samples_by_loss_decline("exp_results/datas/sample_losses/sample_loss_by_epoch.csv")
-    analyse()
+    # analyse()
     # 方式2: 对已训练的模型，单独计算某个epoch的样本loss
     """
     model = YOLO('runs/detect/train/weights/best.pt')

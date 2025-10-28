@@ -11,7 +11,7 @@ def on_val_end(validator):
 
 def simple_train():
     model = YOLO("pretrained_models/yolo11n.pt")  # load a pretrained model (recommended for training)
-    model.train(data="african-wildlife.yaml", epochs=2, imgsz=640, val=True)
+    model.train(data="african-wildlife.yaml", epochs=100, imgsz=640, val=True)
 
 def train_with_callback():
     model = YOLO("pretrained_models/yolo11n.pt")  # load a pretrained model (recommended for training)
