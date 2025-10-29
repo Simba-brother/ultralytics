@@ -7,8 +7,7 @@ from pathlib import Path
 # -----------------------------
 # 配置
 # -----------------------------
-DATASET_DIR = "path/to/african-wildlife/train/labels"  # 原标签路径
-MODIFIED_DIR = "path/to/african-wildlife/train/labels_modified"  # 备份和保存修改后的标签
+DATASET_DIR = "datasets/african-wildlife/labels/train"  # 原标签路径
 CSV_FILE = "modified_labels_record.csv"  # 保存篡改记录
 ERROR_RATE = 0.05  # 篡改比例
 MAX_IOU_BOX_ERROR = 0.5  # box扰动IOU上限
@@ -74,7 +73,6 @@ def move_box_far(box):
 # 主函数
 # -----------------------------
 def modify_labels():
-    os.makedirs(MODIFIED_DIR, exist_ok=True)
     label_files = list(Path(DATASET_DIR).glob("*.txt"))
     num_to_modify = max(1, int(len(label_files)*ERROR_RATE))
     files_to_modify = random.sample(label_files, num_to_modify)
@@ -83,8 +81,8 @@ def modify_labels():
     csv_header = ["file_path", "error_type", "original_label"]
 
     # 备份所有文件
-    for label_file in label_files:
-        shutil.copy(label_file, MODIFIED_DIR)
+    # for label_file in label_files:
+    #     shutil.copy(label_file, MODIFIED_DIR)
 
     for label_file in files_to_modify:
         lines = label_file.read_text().splitlines()
