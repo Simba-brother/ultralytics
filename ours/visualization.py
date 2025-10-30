@@ -2,7 +2,7 @@ import cv2
 import joblib
 import pandas as pd
 import matplotlib.pyplot as plt
-from ours.tamper.inject_error import perturbed_coordinates
+
 
 def vis_classes_f1_over_epoch():
     f1_dict = joblib.load("error_f1.joblib")
@@ -60,12 +60,13 @@ def vis_box_loss():
 
 def vis_box_by_label():
     '''可视化篡改box'''
-    image_path = "datasets/african-wildlife/images/train/1 (64).jpg"
-    label_line = "0 0.486250 0.520833 0.440000 0.515000"
+    image_path = "/home/mml/workspace/ultralytics/datasets/african-wildlife/images/train/4 (230).jpg"
+    label_line = "0.595313 0.529054 0.460938 0.663514"
     # === 解析标注 ===
-    cls, x_center, y_center, w, h = map(float, label_line.split())
+    x_center, y_center, w, h = map(float, label_line.split())
     # 生成篡改后的标注
-    x_center_err, y_center_err, w_err, h_err = perturbed_coordinates(x_center, y_center, w, h)
+    # x_center_err, y_center_err, w_err, h_err = perturbed_coordinates(x_center, y_center, w, h)
+    x_center_err, y_center_err, w_err, h_err = 0.595313, 0.529054, 0.460938, 0.663514
     print("原始标签:", label_line)
     print(f"篡改后: 0 {x_center_err:.6f} {y_center_err:.6f} {w_err:.6f} {h_err:.6f}")
     # === 可视化对比 ===
@@ -84,7 +85,9 @@ def vis_box_by_label():
     # 绘制对比框：原始绿色，篡改红色
     cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
     cv2.rectangle(img, (x1e, y1e), (x2e, y2e), (0, 0, 255), 3)
-    cv2.putText(img, "original", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
-    cv2.putText(img, "modified", (x1e, y1e - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+    cv2.putText(img, "elephant", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
+    cv2.putText(img, "elephant", (x1e, y1e - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
     cv2.imwrite("compare_annotations.jpg", img)
     print("已保存对比结果：compare_annotations.jpg")
+
+vis_box_by_label()

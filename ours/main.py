@@ -13,7 +13,7 @@ from ultralytics.data.utils import check_det_dataset
 class PerSampleLossTracker:
     """追踪每个训练样本的loss"""
 
-    def __init__(self, model, save_dir='exp_results/datas/sample_losses'):
+    def __init__(self, model, save_dir='exp_results/datas/sample_training_metrics_2'):
         self.model = model
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
