@@ -10,17 +10,17 @@ from scipy.stats import linregress
 from ultralytics.data import build_dataloader
 from ultralytics.data.utils import check_det_dataset
 
-class PerSampleLossTracker:
+class PerSampleMetricsTracker:
     """追踪每个训练样本的loss"""
 
-    def __init__(self, model, save_dir='exp_results/datas/sample_training_metrics_2'):
+    def __init__(self, model, save_dir='exp_results/datas/VOC_training_metrics_collection'):
         self.model = model
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
         self.epoch_losses = [] # 存储每个epoch的df
     
-    def calculate_sample_losses(self, data_yaml):
-        """计算训练集每个样本的loss"""
+    def calculate_sample_metrics(self, data_yaml):
+        """计算训练集每个样本的metrics"""
         epoch_idx = self.model.trainer.epoch
         print(f"\n计算 Epoch {epoch_idx} 的样本训练信息...")
         # 设置模型为评估模式
@@ -85,7 +85,7 @@ class PerSampleLossTracker:
                     print(f"已处理 {batch_idx + 1}/{len(dataloader)} 个样本")
         # 保存该epoch的结果
         df = pd.DataFrame(sample_losses)
-        csv_path = self.save_dir / f'epoch_{epoch_idx}_sample_losses.csv'
+        csv_path = self.save_dir / f'epoch_{epoch_idx}_sample_metrics.csv'
         df.to_csv(csv_path, index=False)
         print(f"已保存到: {csv_path}")
 
@@ -160,10 +160,10 @@ class PerSampleLossTracker:
             return
         # 合并所有epoch的数据
         all_data = pd.concat(self.epoch_losses, ignore_index=True)
-        summary_path = self.save_dir / 'all_epochs_sample_losses.csv'
+        summary_path = self.save_dir / 'all_epochs_sample_metrics.csv'
         all_data.to_csv(summary_path, index=False)
         print(f"\n所有epoch的数据已保存到: {summary_path}")
-        
+        '''
         # 生成每个样本的loss变化
         pivot_data = all_data.pivot_table(
             index='sample_idx', # 行索引
@@ -173,8 +173,9 @@ class PerSampleLossTracker:
         pivot_path = self.save_dir / 'sample_loss_by_epoch.csv'
         pivot_data.to_csv(pivot_path)
         print(f"每个样本的epoch变化已保存到: {pivot_path}")
+        '''
 
-def train_with_sample_loss_tracking(model_path='yolo11n.pt', 
+def train_with_sample_metrics_tracking(model_path='yolo11n.pt', 
                                    data_yaml='coco128.yaml',
                                    epochs=10,
                                    **train_kwargs):
@@ -183,10 +184,10 @@ def train_with_sample_loss_tracking(model_path='yolo11n.pt',
     # 初始化模型
     model = YOLO(model_path)
     # 创建loss追踪器
-    loss_tracker = PerSampleLossTracker(model)
+    metrics_tracker = PerSampleMetricsTracker(model)
     # 定义回调函数：每个checkpoint后计算训练样本loss和confi
     def on_model_save(trainer):
-        loss_tracker.calculate_sample_losses(data_yaml)
+        metrics_tracker.calculate_sample_metrics(data_yaml)
     # 添加回调
     model.add_callback("on_model_save", on_model_save)
     # 开始训练
@@ -197,10 +198,11 @@ def train_with_sample_loss_tracking(model_path='yolo11n.pt',
         **train_kwargs
     )
     # 保存汇总
-    loss_tracker.save_summary()
-    return model, loss_tracker
+    metrics_tracker.save_summary()
+    print("训练结束")
+    return model, metrics_tracker
 
-
+'''
 def rank_samples_by_loss_decline(csv_file_path):
     """
     基于损失下降梯度对样本进行排序
@@ -253,11 +255,11 @@ def rank_samples_by_loss_decline(csv_file_path):
     rank_df.to_csv("exp_results/datas/rank.csv",index=False)
     print("rank csv保存在:exp_results/datas/rank.csv")
     return rank_df
+'''
 
 
 
-
-
+'''
 
 def test(epoch,save_dir):
     save_dir = Path(save_dir)
@@ -325,22 +327,20 @@ def test(epoch,save_dir):
     csv_path = save_dir / f'epoch_{epoch}_sample_losses.csv'
     df.to_csv(csv_path, index=False)
     print(f"已保存到: {csv_path}")
+'''
 
 
-# 使用示例
 if __name__ == "__main__":
-    # 方式1: 使用自动追踪功能训练
-    
-    model = train_with_sample_loss_tracking(
+
+    model = train_with_sample_metrics_tracking(
         model_path='yolo11n.pt',
-        data_yaml='african-wildlife.yaml',
+        data_yaml='VOC.yaml', # 'african-wildlife.yaml',
         epochs=20,
         imgsz=640,
         batch=32,
         device=0,
-        save_period=1,
+        save_period=1
     )
-
 
     # 分析样本在训练过程中指标趋势
     # rank_samples_by_loss_decline("exp_results/datas/sample_losses/sample_loss_by_epoch.csv")
@@ -354,7 +354,7 @@ if __name__ == "__main__":
     model.train(data='coco128.yaml', epochs=1, resume=True)
     
     # 计算样本loss
-    sample_losses = tracker.calculate_sample_losses('coco128.yaml', epoch=0)
+    sample_losses = tracker.calculate_sample_metrics('coco128.yaml', epoch=0)
     """
     
     # 读取并分析结果

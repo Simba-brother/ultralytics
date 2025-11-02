@@ -6,11 +6,11 @@ from pathlib import Path
 # -----------------------------
 # 配置
 # -----------------------------
-DATASET_DIR = "datasets/african-wildlife/labels/train"  # 原标签路径
-CSV_FILE = "modified_labels_record_2.csv"  # 保存篡改记录
-ERROR_RATE = 0.05  # 篡改比例
+DATASET_DIR = "datasets/VOC/labels/train2012" # "datasets/african-wildlife/labels/train"  # 原标签路径
+CSV_FILE = "exp_results/datas/modified_labels_record_VOC_train2012.csv"  # 保存篡改记录
+ERROR_RATE = 0.1  # 篡改比例
 MAX_IOU_BOX_ERROR = 0.5  # box扰动IOU上限
-NUM_CLASSES = 4  # 类别总数（请按实际数据集修改）
+NUM_CLASSES = 20  # 类别总数（请按实际数据集修改）
 
 # -----------------------------
 # 工具函数
@@ -65,7 +65,7 @@ def perturb_box(box, max_iou=0.5):
         new_box = (xmin + dx, ymin + dy, xmax + dx, ymax + dy)
         new_box = clip_box_to_unit(*new_box)
         iou = compute_iou(box, new_box)
-        if 0 < iou < max_iou:
+        if 0.1 < iou < max_iou:
             return new_box
     return clip_box_to_unit(*box)
 
@@ -79,7 +79,7 @@ def generate_far_box(box, w, h):
         new_yc = random.uniform(0, 1)
         new_xmin, new_ymin, new_xmax, new_ymax = xywh_to_xyxy(new_xc, new_yc, w_new, h_new)
         new_xmin, new_ymin, new_xmax, new_ymax = clip_box_to_unit(new_xmin, new_ymin, new_xmax, new_ymax)
-        if compute_iou((xmin, ymin, xmax, ymax), (new_xmin, new_ymin, new_xmax, new_ymax)) < 0.05:
+        if compute_iou((xmin, ymin, xmax, ymax), (new_xmin, new_ymin, new_xmax, new_ymax)) <= 0.1:
             new_xc, new_yc, new_w, new_h = xyxy_to_xywh(new_xmin, new_ymin, new_xmax, new_ymax)
             return new_xc, new_yc, new_w, new_h
     # fallback
@@ -137,7 +137,8 @@ def modify_labels():
         elif error_type == "redundancy":
             new_xc, new_yc, new_w, new_h = generate_far_box(
                 (x_center, y_center, w, h), w, h)
-            fake_class = random.randint(0, NUM_CLASSES - 1)
+            # fake_class = random.randint(0, NUM_CLASSES - 1)
+            fake_class = class_idx
             new_line = f"{fake_class} {new_xc:.6f} {new_yc:.6f} {new_w:.6f} {new_h:.6f}"
             lines.append(new_line)
 
@@ -148,7 +149,7 @@ def modify_labels():
         csv_records.append([str(label_file), error_type, original_label])
 
     # 写入CSV记录
-    with open(CSV_FILE, "w", newline="") as f:
+    with open(CSV_FILE, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(csv_header)
         writer.writerows(csv_records)

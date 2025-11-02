@@ -20,8 +20,15 @@ def train_with_callback():
     # 保存训练结果
     # joblib.dump(f1_over_epoch,"error_f1.joblib")
 
+def simple_train_voc():
+    from ultralytics import YOLO
+    # Load a model
+    model = YOLO("yolo11n.pt")  # load a pretrained model (recommended for training)
+    # Train the model
+    results = model.train(data="VOC.yaml", epochs=100, imgsz=640)
+
 if __name__ == "__main__":
-    simple_train()
+    simple_train_voc ()
 
 
 
