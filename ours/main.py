@@ -11,13 +11,13 @@ from ultralytics.data import build_dataloader
 from ultralytics.data.utils import check_det_dataset
 
 class PerSampleMetricsTracker:
-    """追踪每个训练样本的loss"""
+    """追踪每个训练样本的metrics"""
 
-    def __init__(self, model, save_dir='exp_results/datas/VOC_training_metrics_collection'):
+    def __init__(self, model, save_dir='exp_results/datas/VOC/VOC_training_metrics_collection_2'):
         self.model = model
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
-        self.epoch_losses = [] # 存储每个epoch的df
+        self.epoch_metrics = [] # 存储每个epoch的df
     
     def calculate_sample_metrics(self, data_yaml):
         """计算训练集每个样本的metrics"""
@@ -42,7 +42,7 @@ class PerSampleMetricsTracker:
             shuffle=False
         )
         # 用于保存所有训练样本的loss info
-        sample_losses = []
+        sample_metrics = []
         epoch_pt_path = self.model.trainer.save_dir / "weights" / f"epoch{epoch_idx}.pt"
         temp_yolo = YOLO(epoch_pt_path)
         with torch.no_grad():
@@ -79,12 +79,13 @@ class PerSampleMetricsTracker:
                     "conf_sum":conf_sum, # 置信度
                     "box_count_dif":box_count_dif # box 个数
                 }
-                sample_losses.append(sample_info)
+                sample_metrics.append(sample_info)
                 
                 if (batch_idx + 1) % 100 == 0: # 每完成100个batch(sample)就会打印一下
                     print(f"已处理 {batch_idx + 1}/{len(dataloader)} 个样本")
         # 保存该epoch的结果
-        df = pd.DataFrame(sample_losses)
+        df = pd.DataFrame(sample_metrics)
+        self.epoch_metrics.append(df)
         csv_path = self.save_dir / f'epoch_{epoch_idx}_sample_metrics.csv'
         df.to_csv(csv_path, index=False)
         print(f"已保存到: {csv_path}")
@@ -156,7 +157,7 @@ class PerSampleMetricsTracker:
     
     def save_summary(self):
         """保存所有epoch的汇总"""
-        if not self.epoch_losses:
+        if not self.epoch_metrics:
             return
         # 合并所有epoch的数据
         all_data = pd.concat(self.epoch_losses, ignore_index=True)
@@ -335,9 +336,9 @@ if __name__ == "__main__":
     model = train_with_sample_metrics_tracking(
         model_path='yolo11n.pt',
         data_yaml='VOC.yaml', # 'african-wildlife.yaml',
-        epochs=20,
+        epochs=100,
         imgsz=640,
-        batch=32,
+        batch=64,
         device=0,
         save_period=1
     )

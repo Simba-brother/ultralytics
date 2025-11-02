@@ -6,33 +6,35 @@ import topsispy as tp
 import matplotlib.pyplot as plt
 
 
-def concat_all_epoch_df(epoch_nums):
+def concat_all_epoch_df(epoch_nums,epoch_csv_dir):
     epoch_df_list = []
     epoch_idx_list = list(range(epoch_nums))
     for epoch_idx in epoch_idx_list:
-        df = pd.read_csv(f"exp_results/datas/sample_training_metrics_2/epoch_{epoch_idx}_sample_losses.csv")
+        df = pd.read_csv(f"{epoch_csv_dir}/epoch_{epoch_idx}_sample_metrics.csv")
         epoch_df_list.append(df)
     # 合并所有epoch的数据
     all_data = pd.concat(epoch_df_list, ignore_index=True)
-    summary_path = "exp_results/datas/sample_training_metrics_2/all_epochs_sample_metrics.csv"
+    summary_path = f"{epoch_csv_dir}/all_epochs_sample_metrics.csv"
     all_data.to_csv(summary_path, index=False)
-    print(f"\n所有epoch的数据已保存到: {summary_path}")
+    print(f"\n所有epoch的数据已被concat保存到: {summary_path}")
 
-def pivot_metric():
-    all_data = pd.read_csv("exp_results/datas/sample_training_metrics_2/all_epochs_sample_metrics.csv")
+def pivot_metric(epoch_csv_dir):
+    all_data = pd.read_csv(f"{epoch_csv_dir}/all_epochs_sample_metrics.csv")
     for metric_name in ["cls_loss","box_loss","conf_sum","box_count_dif"]:
         pivot_data = all_data.pivot_table(
             index='sample_idx', # 行索引
             columns='epoch', # 列索引
             values= metric_name # 值
         )
-    pivot_path = f"exp_results/datas/sample_training_metrics_2/sample_{metric_name}_by_epoch.csv"
-    pivot_data.to_csv(pivot_path)
-    print(f"每个样本的_{metric_name}_epoch变化已保存到: {pivot_path}")
+        pivot_path = f"{epoch_csv_dir}/sample_{metric_name}_by_epoch.csv"
+        pivot_data.to_csv(pivot_path)
+        print(f"每个样本的_{metric_name}_epoch变化已保存到: {pivot_path}")
 
-def metric_statis_features():
-    metric_name = "box_count_dif"
-    df = pd.read_csv(f"exp_results/datas/sample_training_metrics_2/sample_{metric_name}_by_epoch.csv")
+def metric_statis_features(epoch_csv_dir,metric_name:str):
+    '''
+    metric_name:str:cls_loss|box_loss|conf_sum|box_count_dif
+    '''
+    df = pd.read_csv(f"{epoch_csv_dir}/sample_{metric_name}_by_epoch.csv")
     # 提取损失数据（假设第1列是sample_id，其余列是epoch损失）
     sample_ids = df.iloc[:, 0]
     metric_data = df.iloc[:, 1:].values # (nums,epochs)
@@ -58,16 +60,16 @@ def metric_statis_features():
         }
         data.append(item)
     df = pd.DataFrame(data)
-    csv_path = f"exp_results/datas/sample_training_metrics_2/{metric_name}_feature.csv"
+    csv_path = f"{epoch_csv_dir}/{metric_name}_feature.csv"
     df.to_csv(csv_path, index=False)
     print(f"度量{metric_name}的feature已保存到: {csv_path}")
 
-def feature_splice():
+def feature_splice(epoch_csv_dir):
     files = [
-    "exp_results/datas/sample_training_metrics_2/cls_loss_feature.csv", # 0 cls_loss
-    "exp_results/datas/sample_training_metrics_2/box_loss_feature.csv", # 1 box_loss
-    "exp_results/datas/sample_training_metrics_2/conf_sum_feature.csv", # 2 conf_sum
-    "exp_results/datas/sample_training_metrics_2/box_count_dif_feature.csv", # 3 box_count_dif
+        f"{epoch_csv_dir}/cls_loss_feature.csv", # 0 cls_loss
+        f"{epoch_csv_dir}/box_loss_feature.csv", # 1 box_loss
+        f"{epoch_csv_dir}/conf_sum_feature.csv", # 2 conf_sum
+        f"{epoch_csv_dir}/box_count_dif_feature.csv" # 3 box_count_dif
     ]
 
     # 读取第一个 CSV（保留 sample_idx）
@@ -83,8 +85,20 @@ def feature_splice():
         df_main = pd.concat([df_main, df_tmp], axis=1)
 
     # 保存结果
-    df_main.to_csv("exp_results/datas/sample_training_metrics_2/merged_feature.csv", index=False)
-    print("已生成合并后的 merged_feature")
+    df_main.to_csv(f"{epoch_csv_dir}/merged_feature.csv", index=False)
+    print(f"已生成合并后的 merged_feature,保存在{epoch_csv_dir}/merged_feature.csv")
+
+def build_dataset_features(epoch_csv_dir,epoch_num:int):
+    # 把这些epoch csv拼接成一个大的csv
+    concat_all_epoch_df(epoch_num,epoch_csv_dir)
+    # 每个metric over epoch分割成一个 feature csv
+    pivot_metric(epoch_csv_dir)
+    for metric_name in ["cls_loss","box_loss","conf_sum","box_count_dif"]:
+        metric_statis_features(epoch_csv_dir,metric_name)
+    # 吧所有的metric feature拼接成一个整体feature
+    feature_splice(epoch_csv_dir) # 特征拼接
+    print("build dataset featrues 完成")
+
 
 def calculate_pr_metrics(list_A, list_B, thresholds=None):
     """
@@ -143,8 +157,8 @@ def calculate_pr_metrics(list_A, list_B, thresholds=None):
     
     return pd.DataFrame(results)
 
-def ranking_():
-    merged_feature_df = pd.read_csv("exp_results/datas/sample_training_metrics_2/merged_feature.csv")
+def ranking_(epoch_csv_dir):
+    merged_feature_df = pd.read_csv(f"{epoch_csv_dir}/merged_feature.csv")
     sample_ids = merged_feature_df.iloc[:, 0]
     dataset_features = merged_feature_df.iloc[:, 1:].values # (nums,features)
     '''
@@ -176,7 +190,7 @@ def ranking_():
     sorted_sample_indices = np.argsort(score_array)[::-1]
 
     sample_idx_to_imgpath = {}
-    epoch_0_df = pd.read_csv("exp_results/datas/sample_training_metrics_2/epoch_0_sample_losses.csv")
+    epoch_0_df = pd.read_csv(f"{epoch_csv_dir}/epoch_0_sample_metrics.csv")
     for row_i,row in epoch_0_df.iterrows():
         sample_idx = row["sample_idx"]
         image_path = row["image_path"]
@@ -189,7 +203,7 @@ def ranking_():
 
 def get_error_img_path_list():
     error_img_path_list = []
-    record_df = pd.read_csv("exp_results/datas/modified_labels_record_2.csv")
+    record_df = pd.read_csv("exp_results/datas/VOC/VOC_modify_label_records/modified_labels_record_VOC_train2012.csv")
     for row_i, row in record_df.iterrows():
         label_file_path = row["label_file_path"]
         # 替换目录名和扩展名
@@ -208,7 +222,7 @@ def PR_visualization(gt_error_img_path_list,sorted_img_path_list):
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig("exp_results/datas/PR_2.png")
+    plt.savefig("exp_results/imgs/PR_VOC.png")
 
 def compute_apfd(list_A, list_B):
     """
@@ -231,7 +245,7 @@ def compute_apfd(list_A, list_B):
     apfd = 1 - sum(TF_positions) / (n * m) + 1 / (2 * n)
     return apfd
 
-def case_study():
+def case_study(epoch_nums):
     cases = {
         "class_error_case":{
             "img_file":"/home/mml/workspace/ultralytics/datasets/african-wildlife/images/train/2 (155).jpg",
@@ -256,7 +270,7 @@ def case_study():
     metric_over_epoch_df = pd.read_csv("exp_results/datas/sample_training_metrics_2/sample_box_loss_by_epoch.csv")
 
     imgPath_to_sampleId = {}
-    epoch_0_df = pd.read_csv("exp_results/datas/sample_training_metrics_2/epoch_0_sample_losses.csv")
+    epoch_0_df = pd.read_csv("exp_results/datas/sample_training_metrics_2/epoch_0_sample_metrics.csv")
     for row_i,row in epoch_0_df.iterrows():
         image_path = row["image_path"]
         sample_idx = row["sample_idx"]
@@ -280,7 +294,7 @@ def case_study():
     means_over_epoch = np.mean(filtered_data, axis=0)
 
     plt.figure(figsize=(10, 6))
-    epoch_list = list(range(20))
+    epoch_list = list(range(epoch_nums))
     plt.plot(epoch_list, error_metric_over_epoch, 'r-', linewidth=2, label='redundancy_error_case')
     plt.plot(epoch_list, means_over_epoch, 'g-', linewidth=2, label='clean_mean')
     plt.xlabel('epoch')
@@ -292,14 +306,21 @@ def case_study():
     plt.savefig("exp_results/datas/redundancy_error_case.png")
 
 if __name__ == "__main__":
+    epoch_csv_dir = "exp_results/datas/VOC/VOC_training_metrics_collection"
     # 构建特征集
+    build_dataset_features(epoch_csv_dir,epoch_num=100)
+    print("构建完成")
     # 排序
-    sorted_img_path_list = ranking_()
+    sorted_img_path_list = ranking_(epoch_csv_dir)
+    print("排序完成")
     # 评估排序结果
     gt_error_img_path_list = get_error_img_path_list()
+    print("gt error img path list获得完成")
     PR_visualization(gt_error_img_path_list,sorted_img_path_list)
+    print("PR over cut off绘制完成")
     apfd = compute_apfd(gt_error_img_path_list,sorted_img_path_list)
     print(f"apfd:{apfd}")
+
     # case study
 
 
